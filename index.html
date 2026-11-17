@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gesture Imaging Follow-Along</title>
+<style>
+:root{--bg:#f4f6f9;--fg:#14181f;--mut:#5b6573;--card:#fff;--trk:#d5dbe3;--hold:#138a4e;--rest:#2f6fd6;--wait:#6d7787;--ready:#b27800;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1116;--fg:#f1f4f8;--mut:#9aa5b4;--card:#171c24;--trk:#2b3340;--hold:#1f9d5a;--rest:#3b7be0;--wait:#586274;--ready:#a87000;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1116;--fg:#f1f4f8;--mut:#9aa5b4;--card:#171c24;--trk:#2b3340;--hold:#1f9d5a;--rest:#3b7be0;--wait:#586274;--ready:#a87000;color-scheme:dark}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:0 0 4px}p,.mut{color:var(--mut);margin:4px 0 12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
+label{display:block;font-size:.85rem;color:var(--mut)}
+input,select{width:100%;padding:8px;font-size:1rem;background:var(--card);color:var(--fg);border:1px solid var(--trk);border-radius:6px}
+fieldset{border:1px solid var(--trk);border-radius:10px;background:var(--card);margin:10px 0 14px;padding:10px}legend{font-weight:700}.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:6px 12px}.checks label{display:flex;align-items:flex-start;gap:7px;color:var(--fg);font-size:.9rem}.checks input{width:auto;margin-top:2px}
+button{padding:10px 16px;font-size:1rem;border:0;border-radius:6px;background:var(--rest);color:#fff;cursor:pointer;margin:4px 4px 0 0}
+button.g{background:var(--wait)}
+#top{display:flex;justify-content:space-between;font-size:1.1rem;margin-bottom:6px}
+#overall{position:relative;height:18px;background:var(--trk);border-radius:9px;overflow:hidden}
+#ofill{height:100%;width:0;background:var(--hold)}
+.tk{position:absolute;top:0;bottom:0;width:2px;background:var(--bg)}
+#panel{margin:14px 0 10px;border-radius:14px;padding:12px;text-align:center;color:#fff}
+#panel.hold{background:var(--hold)}#panel.rest,#panel.ref{background:var(--rest)}#panel.wait{background:var(--wait)}#panel.ready{background:var(--ready)}
+#phase{font-size:clamp(1.4rem,5vh,2.6rem);font-weight:700;letter-spacing:.05em}
+#count{font-size:clamp(4rem,22vh,13rem);font-weight:700;line-height:1}
+#gesture{font-size:clamp(1.5rem,5.5vh,3rem);font-weight:700;text-align:center}
+#sub{text-align:center;color:var(--mut);margin:4px 0 14px}
+#motionstate{text-align:center;font-weight:700;color:var(--rest);margin:-4px 0 8px;min-height:1.2em}
+#reference{display:grid;grid-template-columns:repeat(2,minmax(0,280px));justify-content:center;gap:12px;margin:8px auto 14px}
+.hand-card{background:var(--card);color:var(--fg);border:2px solid var(--trk);border-radius:14px;padding:8px;min-width:0;overflow:hidden}
+.hand-card strong{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:.95rem;margin-bottom:2px}
+.orient{font-size:.7rem;font-weight:400;color:var(--mut)}
+.hand-frame{width:100%;aspect-ratio:3/5;background-repeat:no-repeat;background-size:500% 100%;background-position:0 50%;will-change:background-position;filter:drop-shadow(0 6px 8px rgba(0,0,0,.14))}
+.hand-frame.left{transform:scaleX(-1)}
+.hand-frame.single{background-size:contain;background-position:center}
+#blk{position:relative;display:flex;height:34px;margin:6px 0}
+.seg{background:var(--trk);border-right:2px solid var(--bg);opacity:.5}
+.seg.hold{background:var(--hold)}.seg.rest,.seg.ref{background:var(--rest)}.seg.wait{background:var(--wait)}
+.seg.past{opacity:.2}.seg.cur{opacity:1}
+#head{position:absolute;top:-6px;bottom:-6px;width:3px;background:var(--fg);left:0}
+#next{font-size:clamp(1.1rem,3.2vh,1.8rem);text-align:center;margin:12px 0;padding:10px;background:var(--card);border-radius:10px}
+@media(max-width:620px){main{padding:10px}#reference{gap:7px}.hand-card{padding:5px}.orient{display:none}#panel{margin-top:10px}#count{font-size:clamp(3.5rem,18vh,8rem)}}
+</style></head><body><main>
+<section id="setup">
+<h1>Hand gesture imaging: follow-along</h1>
+<p>Five-frame 3D animations show the exact movement for both hands: baseline → gesture during preparation, the target pose during each hold, then gesture → baseline during rest. Sound cues: high beep = hold, low beep = rest, three short ticks = hold is about to start.</p>
+<div class="grid">
+<div><label>Action preset<select id="preset" onchange="presetChanged()"><option value="one">Preset 1 · Finger mobility</option><option value="two">Preset 2 · P2–P12</option><option value="custom">Custom · Choose actions</option></select></label></div>
+<div><label>Reference rest (s)<input id="ref" type="number" value="30"></label></div>
+<div><label>Long hold (s)<input id="lg" type="number" value="4"></label></div>
+<div><label>Rest after long hold (s)<input id="lr" type="number" value="4"></label></div>
+<div><label>Short hold (s)<input id="sh" type="number" value="2"></label></div>
+<div><label>Rest after short hold (s)<input id="sr" type="number" value="2"></label></div>
+<div><label>Reps per block<input id="rp" type="number" value="5"></label></div>
+<div><label>Preparation break before block (s)<input id="wt" type="number" value="10"></label></div>
+<div><label>Get-ready countdown (s)<input id="pr" type="number" value="5"></label></div>
+<div><label>Start from<select id="from"></select></label></div>
+</div>
+<fieldset id="custom" hidden><legend>Custom preset actions</legend><p class="mut">Select actions in the order shown. Each movement automatically includes long- and short-hold blocks.</p><div id="customActions" class="checks"></div></fieldset>
+<label style="display:inline"><input id="mute" type="checkbox" style="width:auto"> Mute sound</label><br>
+<button onclick="start()">Start</button>
+<p class="mut">Keys while running: Space = pause, Right/Left = next block / restart block, F = fullscreen.</p>
+</section>
+<section id="run" hidden>
+<div id="top"><span id="el"></span><span id="rm"></span></div>
+<div id="overall"><div id="ofill"></div></div>
+<div id="panel" class="ready"><div id="phase"></div><div id="count"></div></div>
+<div id="gesture"></div><div id="sub"></div><div id="motionstate" aria-live="polite"></div><div id="reference" aria-label="Animated gesture demonstration"></div>
+<div id="blk"></div>
+<div class="mut" style="text-align:center;font-size:.85rem">This block: green = hold, blue = rest, grey = preparation break. Line = now.</div>
+<div id="next"></div>
+<div style="text-align:center"><button id="pz" onclick="pause()">Pause</button><button class="g" onclick="jump(-1)">Restart block</button><button class="g" onclick="jump(1)">Skip block</button><button class="g" onclick="fs()">Fullscreen</button><button class="g" onclick="stop()">Stop</button></div>
+</section></main>
+<script>
+const $=i=>document.getElementById(i);
+const ACTIONS=[
+ {id:'ref-neutral',pos:1,name:'Record reference position',ref:true,baseline:'neutral',file:'baseline.png'},
+ {id:'p2',pos:2,name:'Stretch out fingers'},{id:'p3',pos:3,name:'Fist, thumb outside'},{id:'p4',pos:4,name:'Fist, thumb inside'},{id:'p5',pos:5,name:'Thumbs up'},{id:'p6',pos:6,name:'Finger gun'},{id:'p7',pos:7,name:'Extend thumb, index, middle (count to three)'},{id:'p8',pos:8,name:'All fingers up except the thumb (count to four)'},{id:'p9',pos:9,name:'Thumb and pinky only (surfer)'},{id:'p10',pos:10,name:'Pinch index and thumb together'},{id:'p11',pos:11,name:'Point with the index finger'},{id:'p12',pos:12,name:'Peace sign'},{id:'p13',pos:13,name:'Bend thumb from reference position'},{id:'p14',pos:14,name:'Bend index finger from reference position'},{id:'p15',pos:15,name:'Bend middle finger from reference position'},{id:'p16',pos:16,name:'Bend ring finger from reference position'},{id:'p17',pos:17,name:'Bend pinky from reference position'},
+ {id:'ref-fist',pos:3,name:'Record Fist, thumb outside',ref:true,baseline:'fist',file:'fist-baseline.png'},
+ {id:'p18',pos:18,name:'Point with thumb from fist',baseline:'fist'},{id:'p19',pos:19,name:'Point with index finger from fist',baseline:'fist'},{id:'p20',pos:20,name:'Point with middle finger from fist',baseline:'fist'},{id:'p21',pos:21,name:'Point with ring finger from fist',baseline:'fist'},{id:'p22',pos:22,name:'Point with pinky finger from fist',baseline:'fist'}
+];
+ACTIONS.forEach(a=>{a.baseline=a.baseline||'neutral';a.file=a.file||`p${String(a.pos).padStart(2,'0')}.png`});
+const BYID=Object.fromEntries(ACTIONS.map(a=>[a.id,a]));
+const PRESETS={one:['ref-neutral','p13','p14','p15','p16','p17','ref-fist','p18','p19','p20','p21','p22'],two:['ref-neutral','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12']};
+const LB={ready:'GET READY',ref:'RECORD REFERENCE',hold:'HOLD',rest:'REST',wait:'REST · PREPARE NEXT GESTURE'};
+let B=[],P=[],total=0,t=0,run=false,active=false,last=0,idx=0,lastKey=null,lastTick=99,ac=null,pre=5,reps=5,curB=null,segs=[],headEl=null;
+function renderReference(b){
+ const single=b.ref?' single':'';
+ const url='gesture-assets/'+b.file;
+ $('reference').innerHTML=`<div class="hand-card"><strong>Right hand <span class="orient">mirrored · thumb screen-right</span></strong><div id="handR" class="hand-frame left${single}" role="img" aria-label="Right hand, mirrored: ${b.name}"></div></div><div class="hand-card"><strong>Left hand <span class="orient">palm view · thumb screen-left</span></strong><div id="handL" class="hand-frame${single}" role="img" aria-label="Left hand: ${b.name}"></div></div>`;
+ ['handR','handL'].forEach(id=>$(id).style.backgroundImage=`url('${url}')`)
+}
+function motionFrame(cur,rem){
+ const base=cur.b.baseline==='fist'?'Fist, thumb outside baseline':'Reference-position baseline';
+ if(cur.kind==='ready'||cur.kind==='ref')return{frame:0,label:base};
+ const elapsed=Math.max(0,cur.dur-rem);
+ if(cur.kind==='hold')return{frame:4,label:'Hold the target gesture'};
+ if(cur.kind==='rest'){
+  const span=Math.max(.35,Math.min(2,cur.dur*.65));
+  const p=Math.min(1,elapsed/span),frame=4-Math.min(4,Math.floor(p*5));
+  return{frame,label:p<1?`Return to ${base}`:base}
+ }
+ if(cur.kind==='wait'){
+  if(cur.dur<4){const p=Math.min(1,elapsed/Math.max(.1,cur.dur));return{frame:Math.min(4,Math.floor(p*5)),label:`Preview: ${base} → target`}}
+  const u=(elapsed%6)/6;
+  if(u<.42){const p=u/.42;return{frame:Math.min(4,Math.floor(p*5)),label:`Preview: ${base} → target`}}
+  if(u<.58)return{frame:4,label:'Preview: target gesture'};
+  if(u<.92){const p=(u-.58)/.34;return{frame:4-Math.min(4,Math.floor(p*5)),label:`Preview: target → ${base}`}}
+  return{frame:0,label:`Preview: ${base}`}
+ }
+ return{frame:0,label:base}
+}
+function updateReference(cur,rem){
+ const m=motionFrame(cur,rem),x=cur.b.ref?'center':(m.frame*25)+'% 50%';
+ if($('handR'))$('handR').style.backgroundPosition=x;
+ if($('handL'))$('handL').style.backgroundPosition=x;
+ $('motionstate').textContent=m.label+(run?'':' · PAUSED')
+}
+function customIds(){const ids=[...document.querySelectorAll('#customActions input:checked')].map(x=>x.value);return ids.length?ids:['ref-neutral']}
+function selectedIds(){return $('preset').value==='custom'?customIds():PRESETS[$('preset').value]}
+function entries(){return selectedIds().flatMap(id=>{const a=BYID[id];return a.ref?[{a,variant:'reference'}]:[{a,variant:'long'},{a,variant:'short'}]})}
+function refreshFrom(){let n=1;$('from').innerHTML=entries().map((e,i)=>`<option value="${i}">R${n++} · ${e.a.ref?e.a.name:`P${e.a.pos} ${e.a.name} (${e.variant} hold)`}</option>`).join('')}
+function presetChanged(){const custom=$('preset').value==='custom';$('custom').hidden=!custom;refreshFrom()}
+(function(){
+ let saved=[];try{saved=JSON.parse(localStorage.getItem('gesture-custom-preset')||'[]')}catch(e){}
+ $('customActions').innerHTML=ACTIONS.map(a=>`<label><input type="checkbox" value="${a.id}" ${saved.includes(a.id)?'checked':''}> <span>${a.ref?a.name:`P${a.pos} · ${a.name}`}</span></label>`).join('');
+ $('customActions').addEventListener('change',()=>{localStorage.setItem('gesture-custom-preset',JSON.stringify(customIds()));refreshFrom()});presetChanged()
+})();
+(function(){if(typeof Image!=='undefined')ACTIONS.forEach(a=>{const i=new Image();i.src='gesture-assets/'+a.file})})();
+function build(p){
+ B=[];P=[];let c=0;
+ entries().forEach((e,i)=>{
+  const hold=e.variant==='reference'?p.ref:e.variant==='long'?p.long:p.short;
+  const rest=e.variant==='long'?p.longRest:p.shortRest;
+  const b={i:B.length,step:'R'+(i+1),pos:e.a.pos,name:e.a.name,hold,start:c,ph:[],ref:e.a.ref,baseline:e.a.baseline,file:e.a.file,actionStart:i===0||entries()[i-1].a.id!==e.a.id};B.push(b);
+  const add=(kind,dur,rep)=>{const ph={kind,dur,t0:c,b,k:b.ph.length,rep};b.ph.push(ph);P.push(ph);c+=dur};
+  if(e.a.ref)add('ref',hold,1);else{add('wait',p.wait,0);for(let r=1;r<=p.reps;r++){add('hold',hold,r);add('rest',rest,r)}}
+  b.dur=c-b.start
+ });
+ total=c}
+function bp(f,d){if(!ac||$('mute').checked)return;const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=.25;o.connect(g);g.connect(ac.destination);o.start();g.gain.setTargetAtTime(0,ac.currentTime+d*.7,.02);o.stop(ac.currentTime+d)}
+const desc=p=>p.kind==='hold'?`HOLD: ${p.b.name} for ${p.dur} s`:p.kind==='ref'?`RECORD: ${p.b.name} for ${p.dur} s`:p.kind==='wait'?`PREPARE: ${p.b.name} (${p.dur} s)`:`REST ${p.dur} s`;
+const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+function drawBlk(b){const el=$('blk');el.innerHTML='';segs=b.ph.map(p=>{const d=document.createElement('div');d.className='seg '+p.kind;d.style.flexGrow=p.dur;el.appendChild(d);return d});headEl=document.createElement('div');headEl.id='head';el.appendChild(headEl)}
+function start(){
+ const v=i=>Math.max(0,+$(i).value||0);
+ const p={ref:v('ref'),long:v('lg'),longRest:v('lr'),short:v('sh'),shortRest:v('sr'),reps:Math.max(1,Math.floor(v('rp'))),wait:v('wt')};
+ pre=v('pr');reps=p.reps;build(p);
+ ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();
+ const ov=$('overall');ov.querySelectorAll('.tk').forEach(e=>e.remove());
+ B.forEach(b=>{if(b.actionStart){const d=document.createElement('i');d.className='tk';d.style.left=(b.start/total*100)+'%';ov.appendChild(d)}});
+ const s=+$('from').value;t=s===0?-pre:B[s].start;
+ idx=0;curB=null;lastKey=null;lastTick=99;run=true;active=true;last=performance.now();
+ $('setup').hidden=true;$('run').hidden=false;$('pz').textContent='Pause';requestAnimationFrame(frame)}
+function frame(){
+ if(!active)return;
+ const n=performance.now();if(run)t+=(n-last)/1000;last=n;
+ if(t>=total){finish();return}
+ let cur,rem,nx,key;
+ if(t<0){cur={kind:'ready',b:B[0],dur:pre,rep:0,k:-1};rem=-t;nx=P[0];key=-1}
+ else{while(idx<P.length-1&&t>=P[idx+1].t0)idx++;while(idx>0&&t<P[idx].t0)idx--;cur=P[idx];rem=cur.t0+cur.dur-t;nx=P[idx+1];key=idx}
+ const b=cur.b;if(b!==curB){curB=b;drawBlk(b);renderReference(b)}
+ updateReference(cur,rem);
+ const k=t<0?-1:cur.k;segs.forEach((s,i)=>{s.classList.toggle('cur',i===k);s.classList.toggle('past',i<k)});
+ headEl.style.left=Math.min(100,Math.max(0,(t-b.start)/b.dur*100))+'%';
+ $('panel').className=cur.kind;
+ $('phase').textContent=LB[cur.kind]+(run?'':' · PAUSED');
+ $('count').textContent=Math.ceil(rem);
+ $('gesture').textContent=b.name;
+ $('sub').textContent=cur.kind==='ready'?'Recording starts after the countdown':b.ref?`${b.step} · Hold this baseline position for recording`:cur.kind==='wait'?`P${b.pos} · ${b.step} · Review the movement and get into position`:`P${b.pos} · ${b.step} · Rep ${cur.rep} of ${reps} · ${b.hold} s hold`;
+ let nt='Next: finished';
+ if(nx){nt='Next: '+desc(nx)}
+ $('next').textContent=nt;
+ const e=Math.max(0,t);$('ofill').style.width=(e/total*100)+'%';$('el').textContent='Elapsed '+fmt(e);$('rm').textContent='Remaining '+fmt(total-e);
+ if(key!==lastKey){lastKey=key;lastTick=99;if(run&&t>=0){cur.kind==='hold'?bp(880,.3):cur.kind==='ref'?bp(660,.3):bp(440,.15)}}
+ const c=Math.ceil(rem);
+ if(c!==lastTick){lastTick=c;if(run&&c>=1&&c<=3&&nx&&(nx.kind==='hold'||nx.kind==='ref')&&cur.kind!=='hold')bp(660,.07)}
+ requestAnimationFrame(frame)}
+function finish(){active=false;run=false;$('panel').className='ready';$('phase').textContent='DONE';$('count').textContent='✓';$('next').textContent='Session complete. Thank you.';$('ofill').style.width='100%';bp(880,.2);setTimeout(()=>bp(880,.4),300)}
+function pause(){if(!active)return;run=!run;last=performance.now();$('pz').textContent=run?'Pause':'Resume'}
+function jump(d){if(!active)return;const bi=t<0?0:P[idx].b.i;let ni=bi+d;if(d<0&&t>=0&&t-B[bi].start>2)ni=bi;ni=Math.max(0,Math.min(B.length-1,ni));t=B[ni].start;idx=0}
+function fs(){const d=document.documentElement;document.fullscreenElement?document.exitFullscreen():d.requestFullscreen&&d.requestFullscreen()}
+function stop(){active=false;run=false;$('run').hidden=true;$('setup').hidden=false}
+document.addEventListener('keydown',e=>{if(!active)return;if(e.code==='Space'){e.preventDefault();pause()}else if(e.key==='ArrowRight')jump(1);else if(e.key==='ArrowLeft')jump(-1);else if(e.key==='f'||e.key==='F')fs()});
+</script></body></html>
