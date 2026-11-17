@@ -8,7 +8,7 @@
 :root[data-theme="dark"]{--bg:#0e1116;--fg:#f1f4f8;--mut:#9aa5b4;--card:#171c24;--trk:#2b3340;--hold:#1f9d5a;--rest:#3b7be0;--wait:#586274;--ready:#a87000;color-scheme:dark}
 *{box-sizing:border-box}[hidden]{display:none!important}
 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif}
-main{max-width:1100px;margin:0 auto;padding:16px}
+main{max-width:1100px;margin:0 auto;padding:56px 16px 16px}
 h1{font-size:1.4rem;margin:0 0 4px}p,.mut{color:var(--mut);margin:4px 0 12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}
 label{display:block;font-size:.85rem;color:var(--mut)}
@@ -40,8 +40,10 @@ button.g{background:var(--wait)}
 .seg.past{opacity:.2}.seg.cur{opacity:1}
 #head{position:absolute;top:-6px;bottom:-6px;width:3px;background:var(--fg);left:0}
 #next{font-size:clamp(1.1rem,3.2vh,1.8rem);text-align:center;margin:12px 0;padding:10px;background:var(--card);border-radius:10px}
-@media(max-width:620px){main{padding:10px}#reference{gap:7px}.hand-card{padding:5px}.orient{display:none}#panel{margin-top:10px}#count{font-size:clamp(3.5rem,18vh,8rem)}}
-</style></head><body><main>
+#liveClock{position:fixed;z-index:50;top:max(8px,env(safe-area-inset-top,0px));right:8px;padding:8px 11px;border:1px solid var(--trk);border-radius:9px;background:color-mix(in srgb,var(--card) 92%,transparent);box-shadow:0 3px 12px rgba(0,0,0,.12);font-size:.78rem;font-weight:700;text-align:right;max-width:calc(100vw - 16px)}
+.data-tools{margin:12px 0;padding:11px;background:var(--card);border:1px solid var(--trk);border-radius:10px}.data-tools strong{display:block;margin-bottom:3px}.data-status,#sessionStarted{color:var(--mut);font-size:.85rem;margin:3px 0 6px}
+@media(max-width:620px){main{padding:56px 10px 10px}#reference{gap:7px}.hand-card{padding:5px}.orient{display:none}#panel{margin-top:10px}#count{font-size:clamp(3.5rem,18vh,8rem)}#liveClock{font-size:.7rem}}
+</style></head><body><div id="liveClock" role="timer" aria-label="Current local date and time"></div><main>
 <section id="setup">
 <h1>Hand gesture imaging: follow-along</h1>
 <p>Five-frame 3D animations show the exact movement for both hands: baseline → gesture during preparation, the target pose during each hold, then gesture → baseline during rest. Sound cues: high beep = hold, low beep = rest, three short ticks = hold is about to start.</p>
@@ -59,18 +61,20 @@ button.g{background:var(--wait)}
 </div>
 <fieldset id="custom" hidden><legend>Custom preset actions</legend><p class="mut">Select actions in the order shown. Each movement automatically includes long- and short-hold blocks.</p><div id="customActions" class="checks"></div></fieldset>
 <label style="display:inline"><input id="mute" type="checkbox" style="width:auto"> Mute sound</label><br>
+<div class="data-tools"><strong>Saved session data</strong><div id="dataStatus" class="data-status"></div><button class="g" onclick="exportSessions('csv',false)">Latest CSV</button><button class="g" onclick="exportSessions('json',false)">Latest JSON</button><button class="g" onclick="exportSessions('csv',true)">All CSV</button><button class="g" onclick="exportSessions('json',true)">All JSON</button></div>
 <button onclick="start()">Start</button>
 <p class="mut">Keys while running: Space = pause, Right/Left = next block / restart block, F = fullscreen.</p>
 </section>
 <section id="run" hidden>
 <div id="top"><span id="el"></span><span id="rm"></span></div>
+<div id="sessionStarted"></div>
 <div id="overall"><div id="ofill"></div></div>
 <div id="panel" class="ready"><div id="phase"></div><div id="count"></div></div>
 <div id="gesture"></div><div id="sub"></div><div id="motionstate" aria-live="polite"></div><div id="reference" aria-label="Animated gesture demonstration"></div>
 <div id="blk"></div>
 <div class="mut" style="text-align:center;font-size:.85rem">This block: green = hold, blue = rest, grey = preparation break. Line = now.</div>
 <div id="next"></div>
-<div style="text-align:center"><button id="pz" onclick="pause()">Pause</button><button class="g" onclick="jump(-1)">Restart block</button><button class="g" onclick="jump(1)">Skip block</button><button class="g" onclick="fs()">Fullscreen</button><button class="g" onclick="stop()">Stop</button></div>
+<div style="text-align:center"><button id="pz" onclick="pause()">Pause</button><button class="g" onclick="jump(-1)">Restart block</button><button class="g" onclick="jump(1)">Skip block</button><button class="g" onclick="fs()">Fullscreen</button><button class="g" onclick="exportSessions('csv',false)">Export CSV</button><button class="g" onclick="exportSessions('json',false)">Export JSON</button><button class="g" onclick="stop()">Stop</button></div>
 </section></main>
 <script>
 const $=i=>document.getElementById(i);
@@ -85,10 +89,26 @@ const BYID=Object.fromEntries(ACTIONS.map(a=>[a.id,a]));
 const PRESETS={one:['ref-neutral','p13','p14','p15','p16','p17','ref-fist','p18','p19','p20','p21','p22'],two:['ref-neutral','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12']};
 const LB={ready:'GET READY',ref:'RECORD REFERENCE',hold:'HOLD',rest:'REST',wait:'REST · PREPARE NEXT GESTURE'};
 let B=[],P=[],total=0,t=0,run=false,active=false,last=0,idx=0,lastKey=null,lastTick=99,ac=null,pre=5,reps=5,curB=null,segs=[],headEl=null;
+const APP_ID='gesture-follow-along',STORE_KEY='gesture-follow-along-sessions-v1',SCHEMA_VERSION='1.0';
+let sessionRecord=null;
+const uid=()=>globalThis.crypto&&crypto.randomUUID?crypto.randomUUID():'session-'+Date.now()+'-'+Math.random().toString(36).slice(2,9);
+const localTime=ms=>new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'medium'}).format(new Date(ms));
+function updateClock(){const now=new Date(),zone=Intl.DateTimeFormat().resolvedOptions().timeZone||'Local';$('liveClock').textContent=localTime(now.getTime())+' · '+zone}
+function loadHistory(){try{return JSON.parse(localStorage.getItem(STORE_KEY)||'[]')}catch(e){return[]}}
+function persistSession(){if(!sessionRecord)return;try{let h=loadHistory().filter(s=>s.session_id!==sessionRecord.session_id);h.unshift(sessionRecord);localStorage.setItem(STORE_KEY,JSON.stringify(h.slice(0,50)));updateDataStatus()}catch(e){}}
+function updateDataStatus(){const h=loadHistory();if(!$('dataStatus'))return;$('dataStatus').textContent=h.length?`${h.length} saved session${h.length===1?'':'s'} · Latest started ${localTime(h[0].started_at_unix_ms)}`:'No saved sessions yet'}
+function startSessionRecord(config){const now=Date.now(),zone=Intl.DateTimeFormat().resolvedOptions().timeZone||'';sessionRecord={schema_version:SCHEMA_VERSION,app:APP_ID,session_id:uid(),status:'running',started_at_utc:new Date(now).toISOString(),started_at_unix_ms:now,started_at_local:new Date(now).toString(),timezone:zone,ended_at_utc:null,configuration:config,events:[]};$('sessionStarted').textContent=`Started ${localTime(now)} · ${zone}`;logEvent('session_start',{detail:'Timed session started',protocol_time_s:Math.max(0,t)});persistSession()}
+function logEvent(event_type,data={}){if(!sessionRecord)return;const now=Date.now();sessionRecord.events.push({event_index:sessionRecord.events.length,event_type,event_onset_utc:new Date(now).toISOString(),event_onset_unix_ms:now,onset_from_session_ms:now-sessionRecord.started_at_unix_ms,protocol_time_s:data.protocol_time_s??Math.max(0,t),planned_duration_s:data.planned_duration_s??'',block_index:data.block_index??'',block_label:data.block_label??'',phase:data.phase??'',action:data.action??'',load_lb:data.load_lb??'',position:data.position??'',repetition:data.repetition??'',speed:data.speed??'',direction:data.direction??'',control:data.control??'',detail:data.detail??''});persistSession()}
+function logPhase(cur,key){logEvent('phase_onset',{protocol_time_s:cur.kind==='ready'?Math.max(0,t):cur.t0,planned_duration_s:cur.dur,block_index:cur.b.i,block_label:cur.b.step,phase:cur.kind,action:cur.b.name,position:cur.b.pos,repetition:cur.rep,detail:key<0?'Get-ready countdown':cur.b.baseline+' baseline'})}
+function finalizeSession(status){if(!sessionRecord||sessionRecord.status!=='running')return;logEvent('session_end',{detail:status});sessionRecord.status=status;sessionRecord.ended_at_utc=new Date().toISOString();persistSession()}
+function csvCell(v){const s=v==null?'':String(v);return/[",\n\r]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+function csvRows(sessions){const cols=['schema_version','app','session_id','session_status','session_started_at_utc','session_started_unix_ms','session_ended_at_utc','preset','start_from','configuration_json','event_index','event_type','event_onset_utc','event_onset_unix_ms','onset_from_session_ms','protocol_time_s','planned_duration_s','block_index','block_label','phase','action','load_lb','position','repetition','speed','direction','control','detail'];const rows=[cols];sessions.forEach(s=>s.events.forEach(e=>rows.push(cols.map(c=>({schema_version:s.schema_version,app:s.app,session_id:s.session_id,session_status:s.status,session_started_at_utc:s.started_at_utc,session_started_unix_ms:s.started_at_unix_ms,session_ended_at_utc:s.ended_at_utc||'',preset:s.configuration?.preset||'',start_from:s.configuration?.start_from??'',configuration_json:JSON.stringify(s.configuration||{}),...e})[c]??''))));return rows.map(r=>r.map(csvCell).join(',')).join('\r\n')}
+function downloadData(text,type,name){const blob=new Blob([text],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+function exportSessions(format,all){const history=loadHistory(),sessions=all?history:(sessionRecord?[sessionRecord]:history.slice(0,1));if(!sessions.length){alert('No saved session data yet.');return}const stamp=new Date().toISOString().replace(/[:.]/g,'-'),scope=all?'all-sessions':'latest-session';if(format==='csv')downloadData(csvRows(sessions),'text/csv;charset=utf-8',`gesture-${scope}-${stamp}.csv`);else downloadData(JSON.stringify({schema_version:SCHEMA_VERSION,app:APP_ID,exported_at_utc:new Date().toISOString(),sessions},null,2),'application/json',`gesture-${scope}-${stamp}.json`)}
 function renderReference(b){
  const single=b.ref?' single':'';
  const url='gesture-assets/'+b.file;
- $('reference').innerHTML=`<div class="hand-card"><strong>Right hand <span class="orient">mirrored · thumb screen-right</span></strong><div id="handR" class="hand-frame left${single}" role="img" aria-label="Right hand, mirrored: ${b.name}"></div></div><div class="hand-card"><strong>Left hand <span class="orient">palm view · thumb screen-left</span></strong><div id="handL" class="hand-frame${single}" role="img" aria-label="Left hand: ${b.name}"></div></div>`;
+ $('reference').innerHTML=`<div class="hand-card"><strong>Left hand <span class="orient">palm view · thumb screen-left</span></strong><div id="handL" class="hand-frame${single}" role="img" aria-label="Left hand: ${b.name}"></div></div><div class="hand-card"><strong>Right hand <span class="orient">mirrored · thumb screen-right</span></strong><div id="handR" class="hand-frame left${single}" role="img" aria-label="Right hand, mirrored: ${b.name}"></div></div>`;
  ['handR','handL'].forEach(id=>$(id).style.backgroundImage=`url('${url}')`)
 }
 function motionFrame(cur,rem){
@@ -152,6 +172,7 @@ function start(){
  B.forEach(b=>{if(b.actionStart){const d=document.createElement('i');d.className='tk';d.style.left=(b.start/total*100)+'%';ov.appendChild(d)}});
  const s=+$('from').value;t=s===0?-pre:B[s].start;
  idx=0;curB=null;lastKey=null;lastTick=99;run=true;active=true;last=performance.now();
+ startSessionRecord({preset:$('preset').value,action_ids:selectedIds(),start_from:s,settings:{...p,ready:pre}});
  $('setup').hidden=true;$('run').hidden=false;$('pz').textContent='Pause';requestAnimationFrame(frame)}
 function frame(){
  if(!active)return;
@@ -173,14 +194,15 @@ function frame(){
  if(nx){nt='Next: '+desc(nx)}
  $('next').textContent=nt;
  const e=Math.max(0,t);$('ofill').style.width=(e/total*100)+'%';$('el').textContent='Elapsed '+fmt(e);$('rm').textContent='Remaining '+fmt(total-e);
- if(key!==lastKey){lastKey=key;lastTick=99;if(run&&t>=0){cur.kind==='hold'?bp(880,.3):cur.kind==='ref'?bp(660,.3):bp(440,.15)}}
+ if(key!==lastKey){lastKey=key;lastTick=99;logPhase(cur,key);if(run&&t>=0){cur.kind==='hold'?bp(880,.3):cur.kind==='ref'?bp(660,.3):bp(440,.15)}}
  const c=Math.ceil(rem);
  if(c!==lastTick){lastTick=c;if(run&&c>=1&&c<=3&&nx&&(nx.kind==='hold'||nx.kind==='ref')&&cur.kind!=='hold')bp(660,.07)}
  requestAnimationFrame(frame)}
-function finish(){active=false;run=false;$('panel').className='ready';$('phase').textContent='DONE';$('count').textContent='✓';$('next').textContent='Session complete. Thank you.';$('ofill').style.width='100%';bp(880,.2);setTimeout(()=>bp(880,.4),300)}
-function pause(){if(!active)return;run=!run;last=performance.now();$('pz').textContent=run?'Pause':'Resume'}
-function jump(d){if(!active)return;const bi=t<0?0:P[idx].b.i;let ni=bi+d;if(d<0&&t>=0&&t-B[bi].start>2)ni=bi;ni=Math.max(0,Math.min(B.length-1,ni));t=B[ni].start;idx=0}
+function finish(){finalizeSession('completed');active=false;run=false;$('panel').className='ready';$('phase').textContent='DONE';$('count').textContent='✓';$('next').textContent='Session complete. Thank you.';$('ofill').style.width='100%';bp(880,.2);setTimeout(()=>bp(880,.4),300)}
+function pause(){if(!active)return;run=!run;last=performance.now();$('pz').textContent=run?'Pause':'Resume';logEvent('control',{control:run?'resume':'pause',detail:run?'Session resumed':'Session paused'})}
+function jump(d){if(!active)return;const bi=t<0?0:P[idx].b.i;let ni=bi+d;if(d<0&&t>=0&&t-B[bi].start>2)ni=bi;ni=Math.max(0,Math.min(B.length-1,ni));logEvent('control',{control:d<0?'restart_block':'skip_block',block_index:bi,block_label:B[bi].step,detail:`Jump to ${B[ni].step} · ${B[ni].name}`});t=B[ni].start;idx=0;lastKey=null}
 function fs(){const d=document.documentElement;document.fullscreenElement?document.exitFullscreen():d.requestFullscreen&&d.requestFullscreen()}
-function stop(){active=false;run=false;$('run').hidden=true;$('setup').hidden=false}
+function stop(){finalizeSession('stopped');active=false;run=false;$('run').hidden=true;$('setup').hidden=false;updateDataStatus()}
 document.addEventListener('keydown',e=>{if(!active)return;if(e.code==='Space'){e.preventDefault();pause()}else if(e.key==='ArrowRight')jump(1);else if(e.key==='ArrowLeft')jump(-1);else if(e.key==='f'||e.key==='F')fs()});
+updateClock();setInterval(updateClock,1000);updateDataStatus();
 </script></body></html>
